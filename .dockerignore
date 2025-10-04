@@ -6,5 +6,5 @@ dist
 .vscode
 tmp
 coverage
-src/**/*.ts
 tests
+
