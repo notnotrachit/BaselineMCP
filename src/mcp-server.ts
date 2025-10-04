@@ -49,6 +49,18 @@ export class WebBaselineMCPServer {
             },
           },
           {
+            name: 'findFeatureId',
+            description: 'Search for feature ids by free-text query',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: { type: 'string' },
+                limit: { type: 'number' },
+              },
+              required: ['query'],
+            },
+          },
+          {
             name: 'listBaselineFeatures',
             description: 'List all features included in a specific Baseline year',
             inputSchema: {
@@ -91,6 +103,8 @@ export class WebBaselineMCPServer {
         switch (name) {
           case 'getFeatureSupport':
             return await this.getFeatureSupport(args?.featureName as string);
+          case 'findFeatureId':
+            return await this.findFeatureId(args?.query as string, args?.limit as number);
           case 'listBaselineFeatures':
             return await this.listBaselineFeatures(args?.year as number);
           case 'compareSupport':
@@ -118,28 +132,36 @@ export class WebBaselineMCPServer {
     await this.dataLoader.loadBCDData();
     
     const feature = this.dataLoader.getFeature(featureName);
+    const raw = this.dataLoader.getRawFeature(featureName);
     if (!feature) {
+      const available = this.dataLoader.getAllFeatures().map(f => f.name || '').filter(Boolean);
       return {
         content: [
           {
             type: 'text',
-            text: `Feature "${featureName}" not found. Available features include: css-has-selector, offscreen-canvas, webusb, fetch-streaming`,
+            text: `Feature "${featureName}" not found. Available features: ${available.join(', ')}`,
           },
         ],
       };
     }
 
     const result = {
+      id: raw?.id || feature.name,
       name: feature.name,
       description: feature.description,
+      description_html: raw?.description_html,
+      group: raw?.group,
+      baseline: raw?.status?.baseline || feature.baseline,
       baselineYear: feature.baseline?.high ? new Date(feature.baseline.high).getFullYear() : null,
       baselineStatus: feature.baseline ? 'Baseline' : 'Not in Baseline',
-      browserSupport: feature.support,
+      browserSupport: raw?.status?.support || feature.support,
+      compat_features: raw?.compat_features || undefined,
       links: {
         mdn: feature.mdn_url,
-        spec: feature.spec_url,
+        spec: raw?.spec || feature.spec_url,
       },
-      status: feature.status,
+      status: raw?.status || feature.status,
+      raw: raw || undefined,
     };
 
     return {
@@ -212,6 +234,21 @@ export class WebBaselineMCPServer {
         {
           type: 'text',
           text: JSON.stringify(comparison, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async findFeatureId(query: string, limit: number = 10): Promise<CallToolResult> {
+    await this.dataLoader.loadBCDData();
+
+    const results = this.dataLoader.findFeatures(query, limit);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ query, count: results.length, results }, null, 2),
         },
       ],
     };

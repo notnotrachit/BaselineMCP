@@ -198,15 +198,61 @@ export class SSEServer {
       try {
         await this.dataLoader.loadBCDData();
         const feature = this.dataLoader.getFeature(req.params.name);
+        const raw = this.dataLoader.getRawFeature(req.params.name);
         
         if (!feature) {
-          return res.status(404).json({ error: 'Feature not found' });
+          const available = this.dataLoader.getAllFeatures().map(f => f.name || '').filter(Boolean);
+          return res.status(404).json({ error: 'Feature not found', available });
         }
 
-        res.json(feature);
+        // Return the enriched feature that includes raw web-features fields when available
+        res.json({
+          id: raw?.id || feature.name,
+          name: feature.name,
+          description: feature.description,
+          group: raw?.group,
+          baseline: raw?.status?.baseline || feature.baseline,
+          browserSupport: raw?.status?.support || feature.support,
+          compat_features: raw?.compat_features || undefined,
+          links: {
+            mdn: feature.mdn_url,
+            spec: raw?.spec || feature.spec_url,
+          },
+          status: raw?.status || feature.status,
+          raw: raw || undefined,
+        });
       } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
       }
+    });
+
+    // Endpoint for listing all feature ids (index)
+    this.app.get('/api/features', async (req, res) => {
+      await this.dataLoader.loadBCDData();
+      const features = this.dataLoader.getAllFeatures().map(f => ({ name: f.name }));
+      res.json({ count: features.length, features });
+    });
+
+    // Expose groups, browsers, snapshots if available from web-features
+    this.app.get('/api/meta/groups', async (req, res) => {
+      await this.dataLoader.loadBCDData();
+      const groups = this.dataLoader.getGroups();
+      if (!groups) return res.status(404).json({ error: 'Groups data not available' });
+      res.json(groups);
+    });
+
+    this.app.get('/api/meta/browsers', async (req, res) => {
+      await this.dataLoader.loadBCDData();
+      const browsers = this.dataLoader.getBrowsers();
+      if (!browsers) return res.status(404).json({ error: 'Browsers data not available' });
+      res.json(browsers);
+    });
+
+    this.app.get('/api/meta/snapshots', async (req, res) => {
+      await this.dataLoader.loadBCDData();
+      const snapshots = this.dataLoader.getSnapshots();
+      if (!snapshots) return res.status(404).json({ error: 'Snapshots data not available' });
+      res.json(snapshots);
     });
 
     this.app.get('/api/baseline/:year', async (req, res) => {
@@ -236,6 +282,17 @@ export class SSEServer {
       } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
       }
+    });
+
+    // REST search endpoint
+    this.app.get('/api/search', async (req, res) => {
+      const q = req.query.q as string | undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      if (!q) return res.status(400).json({ error: 'Missing query param q' });
+
+      await this.dataLoader.loadBCDData();
+      const results = this.dataLoader.findFeatures(q, limit);
+      res.json({ query: q, count: results.length, results });
     });
 
     // Health check
@@ -302,6 +359,20 @@ export class SSEServer {
     };
   }
 
+  // Helper for MCP tool to search features
+  private async getFeatureSearch(query: string, limit: number = 10): Promise<MCPToolResult> {
+    await this.dataLoader.loadBCDData();
+    const results = this.dataLoader.findFeatures(query, limit);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ query, count: results.length, results }, null, 2),
+        },
+      ],
+    };
+  }
+
   private async handleMCPRequest(request: any, sessionId?: string): Promise<{ result: any; sessionId?: string }> {
     const { method, params, id } = request;
 
@@ -349,6 +420,18 @@ export class SSEServer {
                         },
                       },
                       required: ['featureName'],
+                    },
+                  },
+                  {
+                    name: 'findFeatureId',
+                    description: 'Search for feature ids by free-text query',
+                    inputSchema: {
+                      type: 'object',
+                      properties: {
+                        query: { type: 'string' },
+                        limit: { type: 'number' },
+                      },
+                      required: ['query'],
                     },
                   },
                   {
@@ -434,6 +517,8 @@ export class SSEServer {
     switch (name) {
       case 'getFeatureSupport':
         return await this.getFeatureSupport(args?.featureName as string);
+      case 'findFeatureId':
+        return await this.getFeatureSearch(args?.query as string, args?.limit as number);
       case 'listBaselineFeatures':
         return await this.listBaselineFeatures(args?.year as number);
       case 'compareSupport':
@@ -453,7 +538,7 @@ export class SSEServer {
         content: [
           {
             type: 'text',
-            text: `Feature "${featureName}" not found. Available features include: css-has-selector, offscreen-canvas, webusb, fetch-streaming`,
+            text: `Feature "${featureName}" not found.`,
           },
         ],
       };
@@ -557,7 +642,8 @@ export class SSEServer {
 
   public start(port: number = 3001): void {
     // Bind only to localhost for security
-    this.app.listen(port, '127.0.0.1', () => {
+    const host = process.env.HOST || '0.0.0.0';
+    this.app.listen(port, host, () => {
       console.log(`MCP Streamable HTTP Server running on http://127.0.0.1:${port}`);
       console.log(`MCP Endpoint: POST/GET http://127.0.0.1:${port}/`);
       console.log(`API: http://127.0.0.1:${port}/api`);
