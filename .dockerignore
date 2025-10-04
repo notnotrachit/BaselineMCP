@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.github
+*.log
+.vscode
+tmp
+coverage
+src/**/*.ts
+tests
