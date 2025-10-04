@@ -11,6 +11,34 @@ An MCP (Model Context Protocol) server that provides Web Baseline compatibility 
 - Caching for performance
 - Normalized feature name resolution
 
+## Live deployment
+
+This project is deployed at: https://baseline.rcht.dev/
+
+You can point MCP clients and tools at that URL to use the hosted service.
+
+## Integrating with editors and tools
+
+Below are short guides for adding the Web Baseline MCP to several popular developer tools.
+
+Note: These are example configurations — adapt paths and settings to your environment.
+
+### VS Code (Model Context Protocol client)
+
+If you use an MCP-capable VS Code (or the MCP client extension), add the following to your MCP configuration file (for example, in your global `mcp.json` or your workspace):
+
+```jsonc
+{
+  "mcpServers": {
+		"baseline": {
+			"url": "https://baseline.rcht.dev",
+			"transport": "sse",
+			"type": "http"
+		}
+  }
+}
+```
+
 ## Installation
 
 ```bash
