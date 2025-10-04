@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "web-baseline": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "disabled": false,
+      "autoApprove": [
+        "getFeatureSupport",
+        "listBaselineFeatures", 
+        "compareSupport"
+      ]
+    }
+  }
+}

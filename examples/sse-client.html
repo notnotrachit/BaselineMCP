@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Baseline SSE Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .events { background: #f5f5f5; height: 200px; overflow-y: auto; padding: 10px; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        pre { background: #f0f0f0; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Web Baseline MCP Server - SSE Client</h1>
+        
+        <div class="section">
+            <h2>Server-Sent Events</h2>
+            <button onclick="connectSSE()">Connect to Events</button>
+            <button onclick="disconnectSSE()">Disconnect</button>
+            <div id="events" class="events"></div>
+        </div>
+
+        <div class="section">
+            <h2>Feature Support</h2>
+            <input type="text" id="featureName" placeholder="Feature name (e.g., css-has-selector)" value="css-has-selector">
+            <button onclick="getFeature()">Get Feature</button>
+            <pre id="featureResult"></pre>
+        </div>
+
+        <div class="section">
+            <h2>Baseline Features</h2>
+            <input type="number" id="baselineYear" placeholder="Year (e.g., 2024)" value="2024">
+            <button onclick="getBaseline()">Get Baseline</button>
+            <pre id="baselineResult"></pre>
+        </div>
+
+        <div class="section">
+            <h2>Compare Features</h2>
+            <input type="text" id="featureA" placeholder="Feature A" value="css-has-selector">
+            <input type="text" id="featureB" placeholder="Feature B" value="offscreen-canvas">
+            <button onclick="compareFeatures()">Compare</button>
+            <pre id="compareResult"></pre>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        const baseUrl = 'http://localhost:3001';
+
+        function connectSSE() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource(`${baseUrl}/events`);
+            const eventsDiv = document.getElementById('events');
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                eventsDiv.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${JSON.stringify(data)}</div>`;
+                eventsDiv.scrollTop = eventsDiv.scrollHeight;
+            };
+
+            eventSource.onerror = function(event) {
+                eventsDiv.innerHTML += `<div style="color: red;">${new Date().toLocaleTimeString()}: Connection error</div>`;
+            };
+        }
+
+        function disconnectSSE() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+        }
+
+        async function getFeature() {
+            const featureName = document.getElementById('featureName').value;
+            try {
+                const response = await fetch(`${baseUrl}/api/features/${featureName}`);
+                const data = await response.json();
+                document.getElementById('featureResult').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('featureResult').textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function getBaseline() {
+            const year = document.getElementById('baselineYear').value;
+            try {
+                const response = await fetch(`${baseUrl}/api/baseline/${year}`);
+                const data = await response.json();
+                document.getElementById('baselineResult').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('baselineResult').textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function compareFeatures() {
+            const featureA = document.getElementById('featureA').value;
+            const featureB = document.getElementById('featureB').value;
+            try {
+                const response = await fetch(`${baseUrl}/api/compare/${featureA}/${featureB}`);
+                const data = await response.json();
+                document.getElementById('compareResult').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('compareResult').textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
